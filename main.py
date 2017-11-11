@@ -9,14 +9,6 @@ from sklearn.model_selection import train_test_split
 from fuzzywuzzy import fuzz
 
 
-def token_set(x):
-    stra, strb = x.split('\t')
-    return fuzz.token_set_ratio(stra, strb)
-
-def token_sort(x):
-    stra, strb = x.split('\t')
-    return fuzz.token_sort_ratio(stra, strb)
-
 def wv_sim(str, model):
     stra, strb = str.split('\t')
     count = 0.0
@@ -40,6 +32,14 @@ def common_count(str):
         if strb.find(word) >= 0:
             count += 1
     return count
+
+def pratio(x):
+    stra, strb = x.split('\t')
+    return fuzz.partial_ratio(stra, strb)
+
+def token_sort(x):
+    stra, strb = x.split('\t')
+    return fuzz.token_sort_ratio(stra, strb)
 
 op = None
 r2 = 0.0
@@ -84,16 +84,16 @@ for i, k in enumerate(dfs):
             lambda x: common_count(x)).astype(np.float32)
         dfs[k][field + '_wv_sim'] = (dfs[k]['search_term'] + '\t' + dfs[k][field]).map(
             lambda x: wv_sim(x, wv_model)).astype(np.float32)
-        dfs[k][field + '_token_set'] = (dfs[k]['search_term'] + '\t' + dfs[k][field]).map(
-            lambda x: token_set(x)).astype(np.float32)
+        dfs[k][field + '_pratio'] = (dfs[k]['search_term'] + '\t' + dfs[k][field]).map(
+            lambda x: pratio(x)).astype(np.float32)
         dfs[k][field + '_token_sort'] = (dfs[k]['search_term'] + '\t' + dfs[k][field]).map(
             lambda x: token_sort(x)).astype(np.float32)
 
 y_train = dfs['train']['relevance'].values
-x_test = dfs['test'][['search_len', 'product_title_common_count', 'product_title_wv_sim', 'product_title_token_set', 'product_title_token_sort', 'brand_common_count', 'brand_wv_sim', 'brand_token_set', 'brand_token_sort', 'product_description_common_count',
-                      'product_description_wv_sim', 'product_description_token_set', 'product_description_token_sort', 'auxilary_description_common_count', 'auxilary_description_wv_sim', 'auxilary_description_token_set', 'auxilary_description_token_sort']].values
-x_train = dfs['train'][['search_len', 'product_title_common_count', 'product_title_wv_sim', 'product_title_token_set', 'product_title_token_sort', 'brand_common_count', 'brand_wv_sim', 'brand_token_set', 'brand_token_sort', 'product_description_common_count',
-                      'product_description_wv_sim', 'product_description_token_set', 'product_description_token_sort', 'auxilary_description_common_count', 'auxilary_description_wv_sim', 'auxilary_description_token_set', 'auxilary_description_token_sort']].values
+x_test = dfs['test'][['search_len', 'product_title_common_count', 'product_title_wv_sim', 'product_title_pratio', 'product_title_token_sort', 'brand_common_count', 'brand_wv_sim', 'brand_pratio', 'brand_token_sort', 'product_description_common_count',
+                      'product_description_wv_sim', 'product_description_pratio', 'product_description_token_sort', 'auxilary_description_common_count', 'auxilary_description_wv_sim', 'auxilary_description_pratio', 'auxilary_description_token_sort']].values
+x_train = dfs['train'][['search_len', 'product_title_common_count', 'product_title_wv_sim', 'product_title_pratio', 'product_title_token_sort', 'brand_common_count', 'brand_wv_sim', 'brand_pratio', 'brand_token_sort', 'product_description_common_count',
+                      'product_description_wv_sim', 'product_description_pratio', 'product_description_token_sort', 'auxilary_description_common_count', 'auxilary_description_wv_sim', 'auxilary_description_pratio', 'auxilary_description_token_sort']].values
 
 
 model = xgb.XGBRegressor(n_estimators=100, learning_rate=0.08,
@@ -104,5 +104,7 @@ print(r2_score(y_train, y))
 print(np.mean((y_train - y) ** 2) ** 0.5)
 
 y = model.predict(x_test)
+y[y > 3] = 3
+y[y < 0] = 0
 ans = pd.DataFrame({"id": dfs['test']['id'], "relevance": y})
 ans.to_csv('answers.csv', index=False)
